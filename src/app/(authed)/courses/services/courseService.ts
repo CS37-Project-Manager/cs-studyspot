@@ -83,7 +83,7 @@ export const joinCourse = async (courseId: number): Promise<{ success: boolean; 
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ 
-        course_id: courseId.toString() // Convert to string for DB
+        courseId: courseId // Use courseId as the property name to match API expectations
       }),
     });
     
