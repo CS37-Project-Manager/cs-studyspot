@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import styles from "./courses.module.css";
 import {
@@ -16,6 +16,7 @@ import {
 } from "./services/courseService";
 import { useSession } from "@/providers/SessionProvider";
 import { useRouter } from "next/navigation";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 // Mock data for courses (fallback if API fails)
 const mockEnrolledCourses: EnrolledCourse[] = [
@@ -168,72 +169,45 @@ const AvailableCourseCard = ({ course, onJoin }: AvailableCourseCardProps) => {
 
 export default function CoursesPage() {
   const { user, signOut } = useSession(); // Get user data and signOut function from session
-  const [enrolledCourses, setEnrolledCourses] = useState<EnrolledCourse[]>(mockEnrolledCourses);
-  const [availableCourses, setAvailableCourses] = useState<AvailableCourse[]>(mockAvailableCourses);
   const [userName, setUserName] = useState(user.name); // Use user's name from session
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
-
-  // Fetch courses on component mount
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setIsLoading(true);
-        
-        // In a real app, these would be API calls
-        // For now, we'll use the mock data but structure it as if we're making API calls
-        // This makes it easy for the backend team to integrate later
-        
-        // Uncomment these lines when the backend is ready
-        // const enrolledData = await fetchEnrolledCourses();
-        // const availableData = await fetchAvailableCourses();
-        // setEnrolledCourses(enrolledData);
-        // setAvailableCourses(availableData);
-        
-        // For now, simulate API delay
-        setTimeout(() => {
-          setEnrolledCourses(mockEnrolledCourses);
-          setAvailableCourses(mockAvailableCourses);
-          setIsLoading(false);
-        }, 500);
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        setError("Failed to load courses. Please try again later.");
-        setIsLoading(false);
-      }
-    };
-
-    fetchCourses();
-  }, []);
+  const queryClient = useQueryClient();
+  
+  // Use Tanstack Query to fetch enrolled courses
+  const enrolledCoursesQuery = useQuery({
+    queryKey: ['enrolledCourses'],
+    queryFn: fetchEnrolledCourses,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  
+  // Use Tanstack Query to fetch available courses
+  const availableCoursesQuery = useQuery({
+    queryKey: ['availableCourses'],
+    queryFn: fetchAvailableCourses,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  
+  // Use mutation for joining a course
+  const joinCourseMutation = useMutation({
+    mutationFn: (courseId: number) => joinCourse(courseId),
+    onSuccess: () => {
+      // Invalidate queries to refetch the data
+      queryClient.invalidateQueries({ queryKey: ['enrolledCourses'] });
+      queryClient.invalidateQueries({ queryKey: ['availableCourses'] });
+    },
+  });
 
   // Function to handle joining a course
   const handleJoinCourse = async (courseId: number) => {
     try {
-      // In a real app, this would be an API call
-      // Uncomment this when the backend is ready
-      // await joinCourse(courseId);
-      
-      const courseToJoin = availableCourses.find(course => course.id === courseId);
-      if (courseToJoin) {
-        // Add progress property to the course
-        const enrolledCourse: EnrolledCourse = {
-          ...courseToJoin,
-          progress: 0
-        };
-        
-        // Update state
-        setEnrolledCourses([...enrolledCourses, enrolledCourse]);
-        setAvailableCourses(availableCourses.filter(course => course.id !== courseId));
-      }
+      joinCourseMutation.mutate(courseId);
     } catch (err) {
       console.error(`Error joining course ${courseId}:`, err);
-      setError("Failed to join course. Please try again later.");
     }
   };
 
   // Loading state
-  if (isLoading) {
+  if (enrolledCoursesQuery.isLoading || availableCoursesQuery.isLoading) {
     return (
       <div className={styles.loadingContainer}>
         <div className={styles.loadingSpinner}></div>
@@ -243,28 +217,33 @@ export default function CoursesPage() {
   }
 
   // Error state
-  if (error) {
+  if (enrolledCoursesQuery.isError || availableCoursesQuery.isError) {
     return (
       <div className={styles.errorContainer}>
-        <p className={styles.errorMessage}>{error}</p>
+        <p className={styles.errorMessage}>Failed to load courses. Please try again later.</p>
         <button 
           className={styles.retryButton}
-          onClick={() => window.location.reload()}
+          onClick={() => {
+            enrolledCoursesQuery.refetch();
+            availableCoursesQuery.refetch();
+          }}
         >
           Retry
         </button>
       </div>
     );
   }
+  
+  // Get data from queries
+  const enrolledCourses = enrolledCoursesQuery.data || mockEnrolledCourses;
+  const availableCourses = availableCoursesQuery.data || mockAvailableCourses;
 
   return (
     <div className={styles.container}>
       <div className={styles.header}>
         <div className={styles.welcomeSection}>
           <h1 className={styles.welcomeText}>Welcome back!</h1>
-          <div className={styles.userGreeting}>
-            <h2 className={styles.userName}>{userName} <span className={styles.waveEmoji}>👋</span></h2>
-          </div>
+          <h2 className={styles.userName}>{userName} <span className={styles.waveEmoji}>👋</span></h2>
         </div>
         <div className={styles.headerRight}>
           <button 
@@ -292,35 +271,39 @@ export default function CoursesPage() {
         </div>
       </div>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Continue Learning</h2>
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>My enrolled courses</h2>
         <div className={styles.courseGrid}>
           {enrolledCourses.length > 0 ? (
             enrolledCourses.map((course) => (
               <EnrolledCourseCard key={course.id} course={course} />
             ))
           ) : (
-            <p className={styles.emptyMessage}>You haven't enrolled in any courses yet.</p>
+            <p className={styles.emptyMessage}>
+              You haven't enrolled in any courses yet.
+            </p>
           )}
         </div>
-      </section>
+      </div>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Courses</h2>
+      <div className={styles.section}>
+        <h2 className={styles.sectionTitle}>Available courses</h2>
         <div className={styles.courseGrid}>
           {availableCourses.length > 0 ? (
             availableCourses.map((course) => (
               <AvailableCourseCard 
                 key={course.id} 
                 course={course} 
-                onJoin={handleJoinCourse} 
+                onJoin={handleJoinCourse}
               />
             ))
           ) : (
-            <p className={styles.emptyMessage}>No available courses at the moment.</p>
+            <p className={styles.emptyMessage}>
+              No available courses at the moment.
+            </p>
           )}
         </div>
-      </section>
+      </div>
     </div>
   );
 } 

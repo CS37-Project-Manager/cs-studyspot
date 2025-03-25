@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import styles from "./teacher.module.css";
 import { useSession } from "@/providers/SessionProvider";
 import { TeacherCourse, fetchTeacherCourses } from "./services/teacherService";
+import { useQuery } from "@tanstack/react-query";
 
 // Course card component
 const CourseCard = ({ course }: { course: TeacherCourse }) => {
@@ -48,29 +49,15 @@ const CourseCard = ({ course }: { course: TeacherCourse }) => {
 export default function TeacherPage() {
   const router = useRouter();
   const { user, signOut } = useSession(); // Add signOut function from session
-  const [teacherCourses, setTeacherCourses] = useState<TeacherCourse[]>([]);
   const [userName, setUserName] = useState(user.name); // Use user's name from session
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
-
-  // Fetch courses on component mount
-  useEffect(() => {
-    const fetchCourses = async () => {
-      try {
-        setIsLoading(true);
-        const courses = await fetchTeacherCourses();
-        setTeacherCourses(courses);
-        setIsLoading(false);
-      } catch (err) {
-        console.error("Error fetching courses:", err);
-        setError("Failed to load courses. Please try again later.");
-        setIsLoading(false);
-      }
-    };
-
-    fetchCourses();
-  }, []);
+  
+  // Use Tanstack Query to fetch teacher courses
+  const { data: teacherCourses = [], isLoading, isError, refetch } = useQuery({
+    queryKey: ['teacherCourses'],
+    queryFn: fetchTeacherCourses,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
 
   // Function to handle creating a new course
   const handleCreateCourse = () => {
@@ -88,13 +75,13 @@ export default function TeacherPage() {
   }
 
   // Error state
-  if (error) {
+  if (isError) {
     return (
       <div className={styles.errorContainer}>
-        <p className={styles.errorMessage}>{error}</p>
+        <p className={styles.errorMessage}>Failed to load courses. Please try again later.</p>
         <button 
           className={styles.retryButton}
-          onClick={() => window.location.reload()}
+          onClick={() => refetch()}
         >
           Retry
         </button>
