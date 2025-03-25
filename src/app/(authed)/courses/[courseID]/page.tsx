@@ -3,26 +3,61 @@ import BackToPage from "@/components/BackToPage";
 import ChapterSelected from "@/components/ChapterSelected";
 import MaterialsDetail from "@/components/MaterialsDetail";
 import { useState } from "react";
+import { useParams } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
+import { getCourseById } from "../services/courseService";
+import { EnrolledCourse } from "../types";
 
-interface Props {
-  course: string;
-  teacher: string;
-  chapter: number;
-  student: number;
-  progress: number;
-}
+// Mock data for fallback
+const mockCourse: EnrolledCourse = {
+  id: 1,
+  title: "Project Manager",
+  instructor: "Thirawat Kui",
+  progress: 78,
+  imageUrl: "/images/course-placeholder.png",
+};
 
 export default function Course() {
-  const courses: Props = {
-    course: "Project Manager",
-    teacher: "Thirawat Kui",
-    chapter: 4,
-    student: 12,
-    progress: 0,
-  };
-
+  const { courseID } = useParams();
   const [isOverview, setIsOverview] = useState(true);
-  // const [currentChapter, setCurrentChapter] = useState(1);
+  
+  // Use Tanstack Query to fetch course details
+  const { data: course, isLoading, isError, refetch } = useQuery({
+    queryKey: ['course', courseID],
+    queryFn: () => getCourseById(courseID as string),
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div className="w-screen h-screen p-6 flex items-center justify-center">
+        <div className="animate-spin h-10 w-10 border-4 border-blue-500 rounded-full border-t-transparent"></div>
+        <p className="ml-4">Loading course...</p>
+      </div>
+    );
+  }
+
+  // Error state
+  if (isError) {
+    return (
+      <div className="w-screen h-screen p-6 flex flex-col items-center justify-center">
+        <p className="text-red-500 font-medium">Failed to load course details.</p>
+        <button 
+          className="mt-4 px-4 py-2 bg-gray-100 border border-gray-800 rounded-2xl shadow-[3px_3px_0px_rgb(31,41,55)]"
+          onClick={() => refetch()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+  
+  // Get course data (use mock data as fallback)
+  const courseData = course || mockCourse;
+  
+  // Get chapters count as a number
+  const chaptersCount = 4; // This would come from the course data in the real implementation
 
   return (
     <div className="w-screen h-screen p-6 overflow-y-scroll">
@@ -35,19 +70,19 @@ export default function Course() {
           <div className="flex gap-8">
             <div>
               <p className="text-sm">Course</p>
-              <h6 className="text-lg font-medium">{courses.course}</h6>
+              <h6 className="text-lg font-medium">{courseData.title}</h6>
             </div>
             <div>
               <p className="text-sm">Teacher</p>
-              <h6 className="text-lg font-medium">{courses.teacher}</h6>
+              <h6 className="text-lg font-medium">{courseData.instructor}</h6>
             </div>
             <div>
               <p className="text-sm">Chapter</p>
-              <h6 className="text-lg font-medium">{courses.chapter}</h6>
+              <h6 className="text-lg font-medium">{chaptersCount}</h6>
             </div>
             <div>
               <p className="text-sm">Progress</p>
-              <h6 className="text-lg font-medium">{courses.progress} %</h6>
+              <h6 className="text-lg font-medium">{courseData.progress} %</h6>
             </div>
           </div>
           <button className="border border-gray-800 shadow-[3px_3px_0px_rgb(31,41,55)] hover:bg-gray-100 rounded-2xl px-6 h-8">

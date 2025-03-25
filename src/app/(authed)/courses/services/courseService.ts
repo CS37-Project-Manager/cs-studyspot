@@ -12,6 +12,7 @@ const API_ENDPOINTS = {
   ENROLLED_COURSES: "/api/courses/enrolled",
   AVAILABLE_COURSES: "/api/courses/available",
   JOIN_COURSE: "/api/courses/join",
+  COURSE_DETAIL: (id: string) => `/api/courses/${id}`,
 };
 
 /**
@@ -113,6 +114,32 @@ export const getCourseProgress = async (courseId: number): Promise<{ progress: n
     return await response.json();
   } catch (error) {
     console.error(`Failed to fetch progress for course ${courseId}:`, error);
+    throw error;
+  }
+};
+
+/**
+ * Get a course by ID
+ * @param courseId - The ID of the course to fetch
+ */
+export const getCourseById = async (courseId: string | number): Promise<EnrolledCourse> => {
+  try {
+    // In a real app, we'd convert the number ID to a string ID for the DB if needed
+    const id = typeof courseId === 'number' ? courseId.toString() : courseId;
+    
+    const response = await fetch(API_ENDPOINTS.COURSE_DETAIL(id));
+    
+    if (!response.ok) {
+      throw new Error(`Error fetching course details: ${response.statusText}`);
+    }
+    
+    const data = await response.json();
+    
+    // In a real implementation, the backend would return the course data
+    // with instructor name and progress information all included
+    return data;
+  } catch (error) {
+    console.error(`Failed to fetch course ${courseId}:`, error);
     throw error;
   }
 }; 
